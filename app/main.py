@@ -9,9 +9,6 @@ from config import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global dictionary to store conversations in memory
-conversations = {}
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up the application...")
