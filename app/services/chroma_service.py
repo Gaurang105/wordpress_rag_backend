@@ -21,17 +21,13 @@ class ChromaService:
 
     def _sanitize_collection_name(self, name: str) -> str:
         """Sanitize the collection name to meet ChromaDB requirements."""
-        # Replace spaces with underscores and any non-alphanumeric chars (except - and _)
         sanitized = re.sub(r'[^\w\-]', '_', name)
-        # Ensure it starts with a letter or number
         if not sanitized[0].isalnum():
             sanitized = 'user' + sanitized
-        # Ensure it's within length limits
         if len(sanitized) < 3:
             sanitized = sanitized + '_collection'
         if len(sanitized) > 63:
             sanitized = sanitized[:63]
-        # Ensure it ends with an alphanumeric character
         if not sanitized[-1].isalnum():
             sanitized = sanitized + '0'
         return sanitized
@@ -91,8 +87,7 @@ class ChromaService:
             collection = self.get_or_create_collection(user_id)
             results = collection.query(
                 query_texts=query_texts,
-                n_results=n_results,
-                include_metadata=True
+                n_results=n_results
             )
             return results
         except Exception as e:

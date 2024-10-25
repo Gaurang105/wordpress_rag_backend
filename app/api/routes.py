@@ -51,7 +51,6 @@ async def initialize_user(
 
         # Check if this is a new user
         if not data_status['posts']:
-            # New user - process all posts
             logger.info("New user - processing all posts")
             
             # Process posts into chunks
@@ -154,24 +153,34 @@ async def process_query(
             )
 
         # Get relevant context
-        collection = chroma_service.get_or_create_collection(user_id)
-        query_embedding = embed_query(query.query)
-        search_results = similarity_search(query_embedding, collection)
-        context = get_context(search_results)
+        try:
+            collection = chroma_service.get_or_create_collection(user_id)
+            query_embedding = embed_query(query.query)
+            search_results = similarity_search(query_embedding, collection)
+            context = get_context(search_results)
+
+            if not context:
+                logger.warning("No relevant context found for query")
+                context = []  # Proceed with empty context
+                
+        except Exception as e:
+            logger.error(f"Error retrieving context: {str(e)}")
+            context = []  # Proceed with empty context if search fails
 
         # Generate response
-        claude_service = ClaudeService(query.claude_api_key)
-        augmented_query = augment_query(
-            query.query,
-            context,
-            query.chat_history
-        )
-
-        response = await claude_service.generate_response(
-            query=augmented_query,
-            context=context,
-            chat_history=query.chat_history
-        )
+        try:
+            claude_service = ClaudeService(query.claude_api_key)
+            response = await claude_service.generate_response(
+                query=query.query,
+                context=context,
+                chat_history=query.chat_history
+            )
+        except Exception as e:
+            logger.error(f"Error generating Claude response: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate response from Claude API"
+            )
 
         return ChatResponse(
             response=response,
