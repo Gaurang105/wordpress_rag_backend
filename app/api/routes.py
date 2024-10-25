@@ -133,7 +133,7 @@ async def process_query(
     query: ChatQuery,
     user_id: str = Depends(verify_token)
 ):
-    """Process a chat query using RAG."""
+    """Process a chat query using RAG with augmented context."""
     if query.user_id != user_id:
         raise HTTPException(status_code=403, detail="User ID mismatch")
     
@@ -164,10 +164,17 @@ async def process_query(
         search_results = similarity_search(query_embedding, collection)
         context = get_context(search_results)
 
-        # Response using conversation history from memory
+        # Augment the query with context and conversation history
+        augmented_query = augment_query(
+            query=query.query,
+            context=context,
+            conversation_history=conversations.get(conversation_id, [])
+        )
+
+        # Response using augmented query
         claude_service = ClaudeService(query.claude_api_key)
         response = await claude_service.generate_response(
-            query=query.query,
+            query=augmented_query,  # Use augmented query instead of raw query
             context=context,
             chat_history=conversations[conversation_id]
         )
@@ -175,7 +182,7 @@ async def process_query(
         # Store the interaction in conversation history
         conversations[conversation_id].append({
             "role": "user",
-            "content": query.query
+            "content": query.query  # Store original query in history
         })
         conversations[conversation_id].append({
             "role": "assistant",
