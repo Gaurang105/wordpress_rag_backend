@@ -14,7 +14,6 @@ class ChatQuery(BaseModel):
     user_id: str
     query: str
     claude_api_key: str
-    chat_history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
     conversation_id: Optional[str] = None
 
 class ChatResponse(BaseModel):

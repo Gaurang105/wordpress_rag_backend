@@ -22,6 +22,8 @@ from ..utils.helpers import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+conversations = {} # Store conversation history
+
 # Initialize services
 chroma_service = ChromaService()
 s3_service = S3Service()
@@ -136,7 +138,11 @@ async def process_query(
         raise HTTPException(status_code=403, detail="User ID mismatch")
     
     try:
-        # Verify user data exists
+        conversation_id = query.conversation_id or str(uuid.uuid4())
+
+        if conversation_id not in conversations:
+            conversations[conversation_id] = []
+
         data_status = await s3_service.check_user_data_exists(user_id)
         if not data_status['chunked_posts']:
             raise HTTPException(
@@ -153,42 +159,38 @@ async def process_query(
             )
 
         # Get relevant context
-        try:
-            collection = chroma_service.get_or_create_collection(user_id)
-            query_embedding = embed_query(query.query)
-            search_results = similarity_search(query_embedding, collection)
-            context = get_context(search_results)
+        collection = chroma_service.get_or_create_collection(user_id)
+        query_embedding = embed_query(query.query)
+        search_results = similarity_search(query_embedding, collection)
+        context = get_context(search_results)
 
-            if not context:
-                logger.warning("No relevant context found for query")
-                context = []  # Proceed with empty context
-                
-        except Exception as e:
-            logger.error(f"Error retrieving context: {str(e)}")
-            context = []  # Proceed with empty context if search fails
+        # Response using conversation history from memory
+        claude_service = ClaudeService(query.claude_api_key)
+        response = await claude_service.generate_response(
+            query=query.query,
+            context=context,
+            chat_history=conversations[conversation_id]
+        )
 
-        # Generate response
-        try:
-            claude_service = ClaudeService(query.claude_api_key)
-            response = await claude_service.generate_response(
-                query=query.query,
-                context=context,
-                chat_history=query.chat_history
-            )
-        except Exception as e:
-            logger.error(f"Error generating Claude response: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate response from Claude API"
-            )
+        # Store the interaction in conversation history
+        conversations[conversation_id].append({
+            "role": "user",
+            "content": query.query
+        })
+        conversations[conversation_id].append({
+            "role": "assistant",
+            "content": response
+        })
+
+        if len(conversations) > 1000:  # Limit total conversations
+            oldest_id = min(conversations.keys())
+            del conversations[oldest_id]
 
         return ChatResponse(
             response=response,
-            conversation_id=query.conversation_id or str(uuid.uuid4())
+            conversation_id=conversation_id
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
