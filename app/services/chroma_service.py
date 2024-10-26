@@ -49,51 +49,6 @@ class ChromaService:
             logger.error(f"Error with ChromaDB collection for user {user_id}: {str(e)}")
             raise
 
-    async def add_documents(
-        self,
-        user_id: str,
-        documents: List[Dict],
-        embeddings: Optional[List[List[float]]] = None
-    ):
-        """Add documents to a user's collection."""
-        try:
-            collection = self.get_or_create_collection(user_id)
-            ids = [f"doc_{idx}" for idx in range(len(documents))]
-            metadatas = [{
-                'title': doc.get('title', ''),
-                'url': doc.get('url', ''),
-                'post_id': doc.get('post_id', '')
-            } for doc in documents]
-
-            collection.add(
-                documents=[doc['content'] for doc in documents],
-                embeddings=embeddings,
-                metadatas=metadatas,
-                ids=ids
-            )
-            logger.info(f"Added {len(documents)} documents to collection for user {user_id}")
-        except Exception as e:
-            logger.error(f"Error adding documents to ChromaDB: {str(e)}")
-            raise
-
-    async def query_documents(
-        self,
-        user_id: str,
-        query_texts: List[str],
-        n_results: int = 3
-    ):
-        """Query documents in a user's collection."""
-        try:
-            collection = self.get_or_create_collection(user_id)
-            results = collection.query(
-                query_texts=query_texts,
-                n_results=n_results
-            )
-            return results
-        except Exception as e:
-            logger.error(f"Error querying ChromaDB: {str(e)}")
-            raise
-
     async def delete_collection(self, user_id: str):
         """Delete a user's entire collection."""
         try:
