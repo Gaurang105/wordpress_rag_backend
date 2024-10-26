@@ -1,16 +1,18 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict
 from jose import JWTError, jwt
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
+from ..models.schemas import TokenData
 from config import settings
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 
-def create_access_token(user_id: str) -> str:
-    """Create a new JWT token for a user."""
+def create_access_token(data: Dict) -> str:
+    """Create a new JWT token."""
+    to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {"sub": user_id, "exp": expire}
+    to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 def verify_token(token: str = Security(api_key_header)) -> str:
@@ -18,8 +20,13 @@ def verify_token(token: str = Security(api_key_header)) -> str:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")
-        if user_id is None:
+        email: str = payload.get("email")
+        
+        if user_id is None or email is None:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
-        return user_id
+        
+        token_data = TokenData(user_id=user_id, email=email)
+        return token_data.user_id
+        
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication token")
