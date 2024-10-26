@@ -16,6 +16,7 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     wp_posts_url = Column(String, nullable=False)
+    claude_api_key = Column(String, nullable=False)  # Added this field
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

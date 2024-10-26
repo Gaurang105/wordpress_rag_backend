@@ -24,7 +24,8 @@ class UserService:
             db_user = User(
                 name=user_data.name,
                 email=user_data.email,
-                wp_posts_url=str(user_data.wp_posts_url)
+                wp_posts_url=str(user_data.wp_posts_url),
+                claude_api_key=user_data.claude_api_key
             )
             
             self.db.add(db_user)
@@ -79,7 +80,7 @@ class UserService:
             raise
 
     async def delete_user(self, user_id: str) -> bool:
-        """Delete a user and all associated data."""
+        """Delete a user."""
         try:
             user = await self.get_user_by_id(user_id)
             if user:

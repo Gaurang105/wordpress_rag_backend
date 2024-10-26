@@ -8,7 +8,6 @@ import logging
 from ..models.schemas import (
     UserRegistration, 
     UserResponse, 
-    UserInit, 
     WebsiteUpdate, 
     ChatQuery, 
     ChatResponse
@@ -45,8 +44,9 @@ async def register_user(
     user_data: UserRegistration,
     db: AsyncSession = Depends(get_db)
 ):
-    """Register a new user and return their unique ID with access token."""
+    """Register a new user, initialize content, and return their unique ID with access token."""
     try:
+        # Create user
         user_service = UserService(db)
         user = await user_service.create_user(user_data)
         
@@ -55,6 +55,41 @@ async def register_user(
             "sub": user.id,
             "email": user.email
         })
+
+        try:
+            # Fetch all posts
+            logger.info(f"Fetching posts from {user.wp_posts_url}")
+            latest_posts = fetch_wordpress_posts(user.wp_posts_url)
+            
+            if not latest_posts:
+                raise HTTPException(status_code=500, detail="No posts were fetched")
+            
+            logger.info(f"Fetched {len(latest_posts)} posts")
+            
+            # Process posts into chunks
+            logger.info("Creating chunks from posts")
+            chunked_posts = chunk_posts(latest_posts)
+            
+            # Save to S3
+            logger.info("Saving initial data to S3")
+            await s3_service.save_data(user.id, latest_posts, "posts")
+            await s3_service.save_data(user.id, chunked_posts, "chunked_posts")
+            
+            # Create and update ChromaDB
+            logger.info("Creating ChromaDB collection and adding documents")
+            collection = chroma_service.get_or_create_collection(user.id)
+            await update_chroma_index(collection, chunked_posts)
+            
+            logger.info("Content initialization completed successfully")
+
+        except Exception as e:
+            logger.error(f"Error during content initialization: {str(e)}")
+            # If initialization fails, delete the user and raise error
+            await user_service.delete_user(user.id)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to initialize content: {str(e)}"
+            )
         
         return UserResponse(
             user_id=user.id,
@@ -64,117 +99,10 @@ async def register_user(
             created_at=user.created_at,
             access_token=token
         )
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/initialize")
-async def initialize_user(
-    config: UserInit,
-    user_id: str = Depends(verify_token),
-    db: AsyncSession = Depends(get_db)
-):
-    """Initialize user's website data."""
-    try:
-        # Verify user exists and matches
-        user_service = UserService(db)
-        user = await user_service.get_user_by_email(config.email)
-        
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        if user.id != user_id:
-            raise HTTPException(status_code=403, detail="User ID mismatch")
-        
-        # Check existing data
-        data_status = await s3_service.check_user_data_exists(user_id)
-        logger.info(f"Current data status for user {user_id}: {data_status}")
-
-        # Fetch all posts
-        logger.info(f"Fetching posts from {config.wp_posts_url}")
-        latest_posts = fetch_wordpress_posts(config.wp_posts_url)
-        
-        if not latest_posts:
-            raise HTTPException(status_code=500, detail="No posts were fetched")
-        
-        logger.info(f"Fetched {len(latest_posts)} posts")
-
-        # New user flow
-        if not data_status['posts']:
-            logger.info("New user - processing all posts")
-            
-            # Process posts into chunks
-            logger.info("Creating chunks from posts")
-            chunked_posts = chunk_posts(latest_posts)
-            
-            # Save to S3
-            logger.info("Saving initial data to S3")
-            await s3_service.save_data(user_id, latest_posts, "posts")
-            await s3_service.save_data(user_id, chunked_posts, "chunked_posts")
-            
-            # Create and update ChromaDB
-            logger.info("Creating ChromaDB collection and adding documents")
-            collection = chroma_service.get_or_create_collection(user_id)
-            await update_chroma_index(collection, chunked_posts)
-            
-            return {
-                "status": "success",
-                "message": "Successfully initialized new user",
-                "details": {
-                    "total_posts": len(latest_posts),
-                    "total_chunks": len(chunked_posts)
-                }
-            }
-        
-        # Existing user - check for updates
-        existing_posts = await s3_service.load_data(user_id, "posts")
-        new_posts = [
-            post for post in latest_posts
-            if not any(posts_are_equal(post, cached_post) 
-                      for cached_post in existing_posts)
-        ]
-        
-        if not new_posts:
-            return {
-                "status": "success",
-                "message": "No new content to process",
-                "details": {
-                    "total_posts": len(existing_posts),
-                    "new_posts": 0
-                }
-            }
-        
-        # Process new posts
-        logger.info(f"Processing {len(new_posts)} new posts")
-        new_chunked_posts = chunk_posts(new_posts)
-        
-        # Update existing data
-        all_posts = existing_posts + new_posts
-        existing_chunks = await s3_service.load_data(user_id, "chunked_posts") or []
-        all_chunks = existing_chunks + new_chunked_posts
-        
-        # Save updates to S3
-        await s3_service.save_data(user_id, all_posts, "posts")
-        await s3_service.save_data(user_id, all_chunks, "chunked_posts")
-        
-        # Update ChromaDB
-        collection = chroma_service.get_or_create_collection(user_id)
-        await update_chroma_index(collection, new_chunked_posts)
-        
-        return {
-            "status": "success",
-            "message": "Successfully updated existing user",
-            "details": {
-                "total_posts": len(all_posts),
-                "new_posts": len(new_posts),
-                "total_chunks": len(all_chunks),
-                "new_chunks": len(new_chunked_posts)
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"Error during initialization: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/query", response_model=ChatResponse)
@@ -249,7 +177,7 @@ async def process_query(
         logger.info("Query augmented with context and history")
 
         # Generate response
-        claude_service = ClaudeService(query.claude_api_key)
+        claude_service = ClaudeService(user.claude_api_key)
         response = await claude_service.generate_response(
             query=augmented_query,
             context=context,
