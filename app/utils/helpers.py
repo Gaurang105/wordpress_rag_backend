@@ -157,7 +157,6 @@ def similarity_search(
 def get_context(
     results: Dict[str, Any],
     max_chunks: int = 3,
-    distance_threshold: float = 1.8  # Increased threshold since distances seem higher
 ) -> List[Dict]:
     """Extract and filter context from search results."""
     context = []

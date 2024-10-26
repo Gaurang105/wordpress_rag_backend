@@ -1,7 +1,5 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, List
 import uuid
 import logging
 

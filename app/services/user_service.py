@@ -3,7 +3,7 @@ from sqlalchemy import select, update
 from typing import Optional
 import logging
 from ..models.database import User
-from ..models.schemas import UserRegistration, UserResponse
+from ..models.schemas import UserRegistration
 from datetime import datetime
 
 logger = logging.getLogger(__name__)

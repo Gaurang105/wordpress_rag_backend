@@ -22,7 +22,6 @@ async def lifespan(app: FastAPI):
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created successfully")
-        pass
     except Exception as e:
         logger.error(f"Error during startup: {str(e)}")
         raise

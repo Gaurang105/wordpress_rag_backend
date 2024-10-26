@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, Dict
+from typing import Dict
 from jose import JWTError, jwt
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
