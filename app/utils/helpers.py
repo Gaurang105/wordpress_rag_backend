@@ -184,10 +184,8 @@ def get_context(
 def augment_query(
     query: str,
     context: List[Dict],
-    conversation_history: List[Dict]
 ) -> str:
-    """Augment user query with context and conversation history."""
-    # Format context with relevance scores if available
+    """Augment user query with context."""
     if not context:
         formatted_context = "No specific context found."
     else:
@@ -199,18 +197,7 @@ def augment_query(
             for ctx in context
         ])
     
-    # Format conversation history
-    conversation_context = ""
-    if conversation_history:
-        recent_history = conversation_history[-4:]  # Last 2 exchanges
-        conversation_context = "\nPrevious conversation:\n" + "\n".join([
-            f"User: {msg['content']}" if msg['role'] == 'user' 
-            else f"Assistant: {msg['content']}"
-            for msg in recent_history
-        ])
-    
     return f"""Context from website: {formatted_context}
-        {conversation_context}
         
         Current query: {query}"""
 

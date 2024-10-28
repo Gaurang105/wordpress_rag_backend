@@ -28,36 +28,21 @@ class ClaudeService:
         self,
         query: str,
         context: List[Dict],
-        chat_history: List[Dict] = None,
         max_tokens: int = 1000
     ) -> str:
         """Generate a response using Claude API."""
         try:
-            # Format conversation history
-            messages = []
-            if chat_history:
-                for msg in chat_history[-4:]:  # Include last 2 exchanges (4 messages)
-                    messages.append({
-                        'role': msg['role'],
-                        'content': msg['content']
-                    })
-
             # Format context
             formatted_context = "\n\n".join([
                 f"Title: {doc['title']}\nContent: {doc['content']}\nSource: {doc['url']}"
                 for doc in context
             ])
 
-            # Add current query with context
+            # Format current query with context
             current_message = f"""Context from the website: 
             {formatted_context}
             
             Current query: {query}"""
-
-            messages.append({
-                'role': 'user',
-                'content': current_message
-            })
 
             # Make API request
             response = requests.post(
@@ -69,7 +54,7 @@ class ClaudeService:
                 },
                 json={
                     'model': 'claude-3-sonnet-20240229',
-                    'messages': messages,
+                    'messages': [{'role': 'user', 'content': current_message}],
                     'system': self.system_message,
                     'max_tokens': max_tokens,
                     'temperature': 0.3
@@ -94,4 +79,3 @@ class ClaudeService:
             if isinstance(e, requests.exceptions.RequestException):
                 logger.error(f"Request failed with response: {e.response.text if hasattr(e, 'response') else 'No response'}")
             raise
-        

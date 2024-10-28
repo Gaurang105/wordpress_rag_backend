@@ -23,11 +23,9 @@ class WebsiteUpdate(BaseModel):
 class ChatQuery(BaseModel):
     user_id: str
     query: str
-    conversation_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
-    conversation_id: str
 
 class TokenData(BaseModel):
     user_id: str

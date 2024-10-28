@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
 import logging
 
 from ..models.schemas import (
@@ -33,9 +32,6 @@ logger = logging.getLogger(__name__)
 # Initialize services
 chroma_service = ChromaService()
 s3_service = S3Service()
-
-# Store conversation history
-conversations = {}
 
 @router.post("/register", response_model=UserResponse)
 async def register_user(
@@ -109,7 +105,7 @@ async def process_query(
     user_id: str = Depends(verify_token),
     db: AsyncSession = Depends(get_db)
 ):
-    """Process a chat query using RAG with augmented context."""
+    """Process a chat query using RAG."""
     try:
         # Verify user exists
         user_service = UserService(db)
@@ -119,12 +115,6 @@ async def process_query(
         
         if query.user_id != user_id:
             raise HTTPException(status_code=403, detail="User ID mismatch")
-
-        conversation_id = query.conversation_id or str(uuid.uuid4())
-        logger.info(f"Processing query for user {user_id}, conversation {conversation_id}")
-
-        if conversation_id not in conversations:
-            conversations[conversation_id] = []
 
         # Check S3 data
         data_status = await s3_service.check_user_data_exists(user_id)
@@ -170,38 +160,20 @@ async def process_query(
         augmented_query = augment_query(
             query=query.query,
             context=context,
-            conversation_history=conversations.get(conversation_id, [])
+            conversation_history=[]
         )
-        logger.info("Query augmented with context and history")
+        logger.info("Query augmented with context")
 
         # Generate response
         claude_service = ClaudeService(user.claude_api_key)
         response = await claude_service.generate_response(
             query=augmented_query,
             context=context,
-            chat_history=conversations[conversation_id]
+            chat_history=[]
         )
         logger.info("Generated response from Claude")
 
-        # Update conversation history
-        conversations[conversation_id].append({
-            "role": "user",
-            "content": query.query
-        })
-        conversations[conversation_id].append({
-            "role": "assistant",
-            "content": response
-        })
-
-        # Manage conversation history size
-        if len(conversations) > 1000:
-            oldest_id = min(conversations.keys())
-            del conversations[oldest_id]
-
-        return ChatResponse(
-            response=response,
-            conversation_id=conversation_id
-        )
+        return ChatResponse(response=response)
 
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}", exc_info=True)
