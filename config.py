@@ -21,7 +21,7 @@ class Settings:
     # Authentication Settings
     SECRET_KEY = os.getenv("SECRET_KEY")
     ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
+    # ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
     # Database Settings
     POSTGRES_USER = os.getenv("POSTGRES_USER", "gauranggujrati")
