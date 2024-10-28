@@ -160,7 +160,6 @@ async def process_query(
         augmented_query = augment_query(
             query=query.query,
             context=context,
-            conversation_history=[]
         )
         logger.info("Query augmented with context")
 
@@ -169,7 +168,6 @@ async def process_query(
         response = await claude_service.generate_response(
             query=augmented_query,
             context=context,
-            chat_history=[]
         )
         logger.info("Generated response from Claude")
 
