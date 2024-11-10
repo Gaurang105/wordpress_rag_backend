@@ -1,0 +1,1 @@
+Built an AI-powered chatbot API using FastAPI and Claude AI with RAG for context-aware responses, implementing vector search (ChromaDB), AWS S3 storage, JWT authentication, and async content processing, deployed with Neon.tech PostgreSQL.
